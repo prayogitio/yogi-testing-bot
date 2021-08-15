@@ -32,10 +32,13 @@ module.exports = (app) => {
       try {
         const listCommmits = await octokit.rest.repos.listCommits({
           owner: owner,
-          repo: repository
+          repo: repository,
+          sha: MASTER_BRANCH_NAME
         });
+        const commitMessage = listCommmits.data[0].commit.message;
+        const pullRequestNumber = getPullRequestNumberFromCommitMessage(commitMessage);
+        var relBranchName = await generateRelBranchName(owner, octokit, repository, pullRequestNumber);
         var latestCommitSHA = listCommmits.data[0].sha;
-        var relBranchName = await generateRelBranchName(owner, octokit, repository);
       } catch (error) {
         app.log.error(error);
       }
@@ -129,21 +132,43 @@ module.exports = (app) => {
     return DEVELOPMENT_BRANCH_PREFIX.get(repository);
   }
 
-  async function generateRelBranchName(owner, octokit, repository) {
+  async function generateRelBranchName(owner, octokit, repository, pullRequestNumber) {
     const date = new Date();
     const year = date.getFullYear().toString().slice(-2);
     const month = ("0" + (date.getMonth() + 1).toString()).slice(-2);
     const day = ("0" + date.getDate().toString()).slice(-2);
-    let relCounter = await getRelCounter(owner, octokit, repository);
+    let relCounter = await getRelCounter(owner, octokit, repository, pullRequestNumber);
     return "rel/2." + year + month + day + "." + relCounter;
   }
 
-  async function getRelCounter(owner, octokit, repository) {
-    const listBranches = await octokit.rest.git.listMatchingRefs({
-      owner: owner,
-      repo: repository,
-      ref: "heads/rel/2."
-    });
+  async function getRelCounter(owner, octokit, repository, pullRequestNumber) {
+    var listBranches = {};
+    if (pullRequestNumber !== "") {
+      try {
+        var pullRequest = await octokit.rest.pulls.get({
+          owner: owner,
+          repo: repository,
+          pull_number: pullRequestNumber
+        });
+        listBranches.data = [
+          {
+            "ref": pullRequest.data.head.ref
+          }
+        ];
+      } catch (error) {
+        app.log.error(error);
+      }
+    } else {
+      try {
+        listBranches = await octokit.rest.git.listMatchingRefs({
+          owner: owner,
+          repo: repository,
+          ref: "heads/rel/2."
+        });
+      } catch (error) {
+        app.log.error(error);
+      }
+    }
 
     let majorVersion = "0";
     let minorVersion = "0";
@@ -175,3 +200,9 @@ module.exports = (app) => {
     }
   }
 };
+
+function getPullRequestNumberFromCommitMessage(commitMessage) {
+  const pattern = new RegExp("^Merge pull request #(\\d+) from*");
+  let match = pattern.exec(commitMessage);
+  return match == null ? "" : match[1];
+}
