@@ -9,6 +9,7 @@ var util = require("./helper/util");
 module.exports = (app) => {
 	app.log.info("Yay, the app was loaded!");
 	app.on("pull_request.closed", async (context) => {
+
 		const payload = context.payload;
 		const pullRequest = payload.pull_request;
 		const headBranch = pullRequest.head.ref;
