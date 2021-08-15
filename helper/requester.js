@@ -50,7 +50,7 @@ exports.getRelBranches = async (app, context, pullRequestNumber) => {
 	return listBranches;
 };
 
-exports.createBranch = async (app, context, newBranchName, branchingFromLattestCommit) => {
+exports.createBranch = async (app, context, newBranchName, branchingFromLatestCommit) => {
 	const octokit = context.octokit;
 	const payload = context.payload;
 	const pullRequest = payload.pull_request;
@@ -61,7 +61,7 @@ exports.createBranch = async (app, context, newBranchName, branchingFromLattestC
 			owner: config.REPOSITORY_OWNER_TESTING,
 			repo: repository,
 			ref: newBranchName,
-			sha: branchingFromLattestCommit
+			sha: branchingFromLatestCommit
 		});
 	} catch (error) {
 		app.log.error(error);

@@ -1,5 +1,5 @@
 var config = require("./config");
-var helper = require("./helper");
+var requester = require("./requester");
 
 exports.isFeatureMergedToDevelopment = (context) => {
 	const payload = context.payload;
@@ -51,7 +51,7 @@ exports.generateRelBranchName = async (app, context, pullRequestNumber) => {
 	const year = date.getFullYear().toString().slice(-2);
 	const month = ("0" + (date.getMonth() + 1).toString()).slice(-2);
 	const day = ("0" + date.getDate().toString()).slice(-2);
-	const relBranches = await helper.getRelBranches(app, context, pullRequestNumber);
+	const relBranches = await requester.getRelBranches(app, context, pullRequestNumber);
 	if (!Object.keys(relBranches).length) {
 		app.log.info(`Failed to detect rel branches on repository ${context.payload.pull_request.base.repo.name}`);
 		return "";

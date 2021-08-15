@@ -1,6 +1,6 @@
-var helper = require("./helper");
-var config = require("./config");
-var util = require("./util"); 
+var requester = require("./helper/requester");
+var config = require("./helper/config");
+var util = require("./helper/util");
 
 /**
  * This is the main entrypoint to your Probot app
@@ -16,7 +16,7 @@ module.exports = (app) => {
 		const repository = pullRequest.base.repo.name;
 
 		if (util.isFeatureMergedToDevelopment(context)) {
-			const listCommits = await helper.getCommitsOfBranch(app, context, config.MASTER_BRANCH_NAME);
+			const listCommits = await requester.getCommitsOfBranch(app, context, config.MASTER_BRANCH_NAME);
 			if (!Object.keys(listCommits).length) {
 				app.log.info(`No commits found on ${config.MASTER_BRANCH_NAME}. Bot will not continue the process.`);
 				return;
@@ -29,14 +29,14 @@ module.exports = (app) => {
 				return;
 			}
 			const latestCommitSHA = listCommits.data[0].sha;
-			const isNewBranchCreated = await helper.createBranch(app, context, "refs/heads/" + relBranchName, latestCommitSHA);
+			const isNewBranchCreated = await requester.createBranch(app, context, "refs/heads/" + relBranchName, latestCommitSHA);
 			if (!isNewBranchCreated) {
 				app.log.info(`Failed to create branch ${relBranchName} on repository ${repository}, ${relBranchName} might be already exist. Bot will continue to merge ${util.getDevelopmentBranchNameOf(repository)} to ${relBranchName}`);
 			}
-			await helper.mergeDevelopmentToRel(app, context, relBranchName);
-			await helper.openPullRequestFromRelToMaster(app, context, relBranchName, pullRequestBody);
+			await requester.mergeDevelopmentToRel(app, context, relBranchName);
+			await requester.openPullRequestFromRelToMaster(app, context, relBranchName, pullRequestBody);
 		} else if (util.isRelMergedToMaster(context)) {
-			await helper.openPullRequestFromRelToDevelopment(app, context, headBranch, pullRequestBody);
+			await requester.openPullRequestFromRelToDevelopment(app, context, headBranch, pullRequestBody);
 		}
 	});
 }
