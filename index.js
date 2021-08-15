@@ -1,208 +1,42 @@
+var helper = require("./helper");
+var config = require("./config");
+var util = require("./util"); 
+
 /**
  * This is the main entrypoint to your Probot app
  * @param {import('probot').Probot} app
  */
 module.exports = (app) => {
+	app.log.info("Yay, the app was loaded!");
+	app.on("pull_request.closed", async (context) => {
+		const payload = context.payload;
+		const pullRequest = payload.pull_request;
+		const headBranch = pullRequest.head.ref;
+		const pullRequestBody = pullRequest.body;
+		const repository = pullRequest.base.repo.name;
 
-  const REPOSITORY_OWNER = "kaskus";
-  const REPOSITORY_OWNER_TESTING = "prayogitio";
-  const MASTER_BRANCH_NAME = "master";
-  const DEVELOPMENT_BRANCH_NAME = new Map();
-  const DEVELOPMENT_BRANCH_PREFIX = new Map();
-
-  initializeDevelopmentBranchName();
-  initializeDevelopmentBranchPrefix();
-
-  app.log.info("Yay, the app was loaded!");
-
-  // Auto create branch REL and PR REL
-  app.on("pull_request.closed", async (context) => {
-
-    const payload = context.payload;
-    const pullRequest = payload.pull_request;
-    const isMerged = pullRequest.merged;
-    const baseBranch = pullRequest.base.ref;
-    const headBranch = pullRequest.head.ref;
-    const pullRequestBody = pullRequest.body;
-    const repository = pullRequest.base.repo.name;
-    const octokit = context.octokit;
-    const owner = REPOSITORY_OWNER_TESTING;
-
-    if (isMerged && baseBranch == getDevelopmentBranchNameOf(repository) && isDevelopmentBranch(headBranch, repository)) {
-      try {
-        const listCommmits = await octokit.rest.repos.listCommits({
-          owner: owner,
-          repo: repository,
-          sha: MASTER_BRANCH_NAME
-        });
-        const commitMessage = listCommmits.data[0].commit.message;
-        const pullRequestNumber = getPullRequestNumberFromCommitMessage(commitMessage);
-        var relBranchName = await generateRelBranchName(owner, octokit, repository, pullRequestNumber);
-        var latestCommitSHA = listCommmits.data[0].sha;
-      } catch (error) {
-        app.log.error(error);
-      }
-
-      try {
-        await octokit.rest.git.createRef({
-          owner: owner,
-          repo: repository,
-          ref: "refs/heads/" + relBranchName,
-          sha: latestCommitSHA
-        });
-      } catch (error) {
-        app.log.error(error);
-      }
-
-      try {
-        await octokit.rest.repos.merge({
-          owner: owner,
-          repo: repository,
-          base: relBranchName,
-          head: getDevelopmentBranchNameOf(repository)
-        });
-      } catch (error) {
-        app.log.error(error);
-      }
-
-      try {
-        await octokit.rest.pulls.create({
-          owner: owner,
-          repo: repository,
-          head: relBranchName,
-          base: MASTER_BRANCH_NAME,
-          title: relBranchName,
-          body: pullRequestBody
-        });
-      } catch (error) {
-        app.log.error(error);
-      }
-    } else if (isMerged && baseBranch == MASTER_BRANCH_NAME) {
-      try {
-        await octokit.rest.pulls.create({
-          owner: owner,
-          repo: repository,
-          head: headBranch,
-          base: getDevelopmentBranchNameOf(repository),
-          title: "Mergeback " + headBranch,
-          body: pullRequestBody
-        });
-      } catch (error) {
-        app.log.error(error);
-      }
-    }
-  });
-
-  function isDevelopmentBranch(headBranch, repository) {
-    const developmentBranchPrefix = getDevelopmentBranchPrefixOf(repository);
-    const pattern = new RegExp("^" + developmentBranchPrefix + ".*");
-    let match = pattern.test(headBranch);
-    return match ? true : false;
-  }
-
-  function initializeDevelopmentBranchName() {
-    DEVELOPMENT_BRANCH_NAME.set('kaskus-forum', 'development');
-    DEVELOPMENT_BRANCH_NAME.set('kaskus-forum-wap', 'development');
-    DEVELOPMENT_BRANCH_NAME.set('kaskus-core-forum', 'development');
-    DEVELOPMENT_BRANCH_NAME.set('kaskus-api', 'development');
-    DEVELOPMENT_BRANCH_NAME.set('kaskus-fjb', 'development');
-    DEVELOPMENT_BRANCH_NAME.set('kaskus-fjb-wap', 'development');
-    DEVELOPMENT_BRANCH_NAME.set('kaskus-core', 'dev-master');
-
-    DEVELOPMENT_BRANCH_NAME.set('testing', 'development');
-  }
-
-  function initializeDevelopmentBranchPrefix() {
-    DEVELOPMENT_BRANCH_PREFIX.set('kaskus-forum', 'development-');
-    DEVELOPMENT_BRANCH_PREFIX.set('kaskus-forum-wap', 'development-');
-    DEVELOPMENT_BRANCH_PREFIX.set('kaskus-core-forum', 'development-');
-    DEVELOPMENT_BRANCH_PREFIX.set('kaskus-api', 'development-');
-    DEVELOPMENT_BRANCH_PREFIX.set('kaskus-fjb', 'development-');
-    DEVELOPMENT_BRANCH_PREFIX.set('kaskus-fjb-wap', 'development-');
-    DEVELOPMENT_BRANCH_PREFIX.set('kaskus-core', 'dev-master-');
-
-    DEVELOPMENT_BRANCH_PREFIX.set('testing', 'development-');
-  }
-
-  function getDevelopmentBranchNameOf(repository) {
-    return DEVELOPMENT_BRANCH_NAME.get(repository);
-  }
-
-  function getDevelopmentBranchPrefixOf(repository) {
-    return DEVELOPMENT_BRANCH_PREFIX.get(repository);
-  }
-
-  async function generateRelBranchName(owner, octokit, repository, pullRequestNumber) {
-    const date = new Date();
-    const year = date.getFullYear().toString().slice(-2);
-    const month = ("0" + (date.getMonth() + 1).toString()).slice(-2);
-    const day = ("0" + date.getDate().toString()).slice(-2);
-    let relCounter = await getRelCounter(owner, octokit, repository, pullRequestNumber);
-    return "rel/2." + year + month + day + "." + relCounter;
-  }
-
-  async function getRelCounter(owner, octokit, repository, pullRequestNumber) {
-    var listBranches = {};
-    if (pullRequestNumber !== "") {
-      try {
-        var pullRequest = await octokit.rest.pulls.get({
-          owner: owner,
-          repo: repository,
-          pull_number: pullRequestNumber
-        });
-        listBranches.data = [
-          {
-            "ref": pullRequest.data.head.ref
-          }
-        ];
-      } catch (error) {
-        app.log.error(error);
-      }
-    } else {
-      try {
-        listBranches = await octokit.rest.git.listMatchingRefs({
-          owner: owner,
-          repo: repository,
-          ref: "heads/rel/2."
-        });
-      } catch (error) {
-        app.log.error(error);
-      }
-    }
-
-    let majorVersion = "0";
-    let minorVersion = "0";
-    let minorVersionClamp = 5;
-
-    const pattern = new RegExp("rel\/2.\\d{6}\.(\\d*)\.?(\\d*)");
-    for (let index = 0; index < listBranches.data.length; index++) {
-      let element = listBranches.data[index].ref;
-      let match = pattern.exec(element);
-      if (match) {
-        if (parseInt(majorVersion) < parseInt(match[1])) {
-          majorVersion = match[1];
-          minorVersion = match[2] ? match[2] : "0";
-        } else if (parseInt(minorVersion) < parseInt(match[2])) {
-          minorVersion = match[2];
-        }
-      }
-    }
-    if (parseInt(minorVersion) >= minorVersionClamp) {
-      majorVersion = (parseInt(majorVersion) + 1).toString();
-      minorVersion = "0";
-    } else {
-      minorVersion = (parseInt(minorVersion) + 1).toString();
-    }
-    if (minorVersion == "0") {
-      return majorVersion;
-    } else {
-      return majorVersion.concat(".").concat(minorVersion);
-    }
-  }
-};
-
-function getPullRequestNumberFromCommitMessage(commitMessage) {
-  const pattern = new RegExp("^Merge pull request #(\\d+) from*");
-  let match = pattern.exec(commitMessage);
-  return match == null ? "" : match[1];
+		if (util.isFeatureMergedToDevelopment(context)) {
+			const listCommits = await helper.getCommitsOfBranch(app, context, config.MASTER_BRANCH_NAME);
+			if (!Object.keys(listCommits).length) {
+				app.log.info(`No commits found on ${config.MASTER_BRANCH_NAME}. Bot will not continue the process.`);
+				return;
+			}
+			const commitMessage = listCommits.data[0].commit.message;
+			const pullRequestNumber = util.getPullRequestNumberFromCommitMessage(commitMessage);
+			const relBranchName = await util.generateRelBranchName(app, context, pullRequestNumber);
+			if (relBranchName == "") {
+				app.log.info(`Failed to generate new rel branch name. Bot will not continue the process.`);
+				return;
+			}
+			const latestCommitSHA = listCommits.data[0].sha;
+			const isNewBranchCreated = await helper.createBranch(app, context, "refs/heads/" + relBranchName, latestCommitSHA);
+			if (!isNewBranchCreated) {
+				app.log.info(`Failed to create branch ${relBranchName} on repository ${repository}, ${relBranchName} might be already exist. Bot will continue to merge ${util.getDevelopmentBranchNameOf(repository)} to ${relBranchName}`);
+			}
+			await helper.mergeDevelopmentToRel(app, context, relBranchName);
+			await helper.openPullRequestFromRelToMaster(app, context, relBranchName, pullRequestBody);
+		} else if (util.isRelMergedToMaster(context)) {
+			await helper.openPullRequestFromRelToDevelopment(app, context, headBranch, pullRequestBody);
+		}
+	});
 }
