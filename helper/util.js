@@ -17,8 +17,20 @@ exports.isRelMergedToMaster = (context) => {
 	const pullRequest = payload.pull_request;
 	const isMerged = pullRequest.merged;
 	const baseBranch = pullRequest.base.ref;
+	const headBranch = pullRequest.head.ref;
 
-	return isMerged && baseBranch == config.MASTER_BRANCH_NAME;
+	return isMerged && baseBranch == config.MASTER_BRANCH_NAME && isReleaseBranch(headBranch);
+};
+
+exports.isRelMergedToDevelopment = (context) => {
+	const payload = context.payload;
+	const pullRequest = payload.pull_request;
+	const isMerged = pullRequest.merged;
+	const baseBranch = pullRequest.base.ref;
+	const headBranch = pullRequest.head.ref;
+	const repository = pullRequest.base.repo.name;
+
+	return isMerged && baseBranch == getDevelopmentBranchNameOf(repository) && isReleaseBranch(headBranch);
 };
 
 function isDevelopmentBranch(headBranch, repository) {
@@ -27,6 +39,13 @@ function isDevelopmentBranch(headBranch, repository) {
 	let match = pattern.test(headBranch);
 
 	return match ? true : false;
+}
+
+function isReleaseBranch(headBranch, repository) {
+	const pattern = new RegExp("^" + config.REL_BRANCH_NAME_PATTERN);
+	let match = pattern.test(headBranch);
+
+	return match ? true: false;
 }
 
 function getDevelopmentBranchNameOf(repository) {

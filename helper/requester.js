@@ -55,7 +55,7 @@ exports.createBranch = async (app, context, newBranchName, branchingFromLatestCo
 	const payload = context.payload;
 	const pullRequest = payload.pull_request;
 	const repository = pullRequest.base.repo.name;
-	let flag = true;
+	let isRelAlreadyExist = false;
 	try {
 		await octokit.rest.git.createRef({
 			owner: config.REPOSITORY_OWNER_TESTING,
@@ -65,9 +65,11 @@ exports.createBranch = async (app, context, newBranchName, branchingFromLatestCo
 		});
 	} catch (error) {
 		app.log.error(error);
-		flag = false;
+		if (error.status == 422) {
+			isRelAlreadyExist = true;
+		}
 	}
-	return flag;
+	return isRelAlreadyExist;
 };
 
 exports.mergeDevelopmentToRel = async (app, context, rel) => {
@@ -111,6 +113,7 @@ exports.openPullRequestFromRelToDevelopment = async (app, context, rel, pullRequ
 	const payload = context.payload;
 	const pullRequest = payload.pull_request;
 	const repository = pullRequest.base.repo.name;
+	let isMergebackPullRequestOpened = true;
 	try {
 		await octokit.rest.pulls.create({
 			owner: config.REPOSITORY_OWNER_TESTING,
@@ -119,6 +122,84 @@ exports.openPullRequestFromRelToDevelopment = async (app, context, rel, pullRequ
 			base: util.getDevelopmentBranchNameOf(repository),
 			title: "Mergeback " + rel + " to " + util.getDevelopmentBranchNameOf(repository),
 			body: pullRequestBody
+		});
+	} catch (error) {
+		app.log.error(error);
+		if (error.status == 422) {
+			isMergebackPullRequestOpened = false;
+		}
+	}
+	return isMergebackPullRequestOpened;
+};
+
+exports.updateRelBranch = async (app, context, rel, sha) => {
+	const octokit = context.octokit;
+	const payload = context.payload;
+	const pullRequest = payload.pull_request;
+	const repository = pullRequest.base.repo.name;
+	let isUpdateFastForward = true;
+	try {
+		await octokit.rest.git.updateRef({
+			owner: config.REPOSITORY_OWNER_TESTING,
+			repo: repository,
+			ref: rel,
+			sha: sha
+		});
+	} catch (error) {
+		app.log.error(error);
+		if (error.status == 422) {
+			isUpdateFastForward = false;
+		}
+	}
+	return isUpdateFastForward;
+};
+
+exports.createComment = async (app, context, pr, comment) => {
+	const octokit = context.octokit;
+	const payload = context.payload;
+	const pullRequest = payload.pull_request;
+	const repository = pullRequest.base.repo.name;
+	try {
+		await octokit.issues.createComment({
+			owner: config.REPOSITORY_OWNER_TESTING,
+			repo: repository,
+			issue_number: pr == "" ? pullRequest.number : pr.number,
+			body: comment + config.BOT_SIGNATURE
+		});
+	} catch (error) {
+		app.log.error(error);
+	}
+};
+
+exports.findRelPullRequest = async (app, context, rel) => {
+	const octokit = context.octokit;
+	const payload = context.payload;
+	const pullRequest = payload.pull_request;
+	const repository = pullRequest.base.repo.name;
+	try {
+		let relBranches = await octokit.rest.pulls.list({
+			owner: config.REPOSITORY_OWNER_TESTING,
+			repo: repository,
+			state: "open",
+			head: config.REPOSITORY_OWNER_TESTING + ":" + rel,
+			base: config.MASTER_BRANCH_NAME
+		});
+		return relBranches.data.length > 0 ? relBranches.data[0] : {};
+	} catch (error) {
+		app.log.error(error);
+	}
+};
+
+exports.deleteBranch = async (app, context, branch) => {
+	const octokit = context.octokit;
+	const payload = context.payload;
+	const pullRequest = payload.pull_request;
+	const repository = pullRequest.base.repo.name;
+	try {
+		await octokit.rest.git.deleteRef({
+			owner: config.REPOSITORY_OWNER_TESTING,
+			repo: repository,
+			ref: branch
 		});
 	} catch (error) {
 		app.log.error(error);
