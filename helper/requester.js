@@ -94,8 +94,9 @@ exports.openPullRequestFromRelToMaster = async (app, context, rel, pullRequestBo
 	const payload = context.payload;
 	const pullRequest = payload.pull_request;
 	const repository = pullRequest.base.repo.name;
+	var releasePR = {};
 	try {
-		await octokit.rest.pulls.create({
+		releasePR = await octokit.rest.pulls.create({
 			owner: config.REPOSITORY_OWNER_TESTING,
 			repo: repository,
 			head: rel,
@@ -106,6 +107,7 @@ exports.openPullRequestFromRelToMaster = async (app, context, rel, pullRequestBo
 	} catch (error) {
 		app.log.error(error);
 	}
+	return releasePR;
 };
 
 exports.openPullRequestFromRelToDevelopment = async (app, context, rel, pullRequestBody) => {
@@ -163,7 +165,7 @@ exports.createComment = async (app, context, pr, comment) => {
 		await octokit.issues.createComment({
 			owner: config.REPOSITORY_OWNER_TESTING,
 			repo: repository,
-			issue_number: pr == "" ? pullRequest.number : pr.number,
+			issue_number: pr.number,
 			body: comment + config.BOT_SIGNATURE
 		});
 	} catch (error) {
@@ -176,18 +178,19 @@ exports.findRelPullRequest = async (app, context, rel) => {
 	const payload = context.payload;
 	const pullRequest = payload.pull_request;
 	const repository = pullRequest.base.repo.name;
+	var relBranches = {};
 	try {
-		let relBranches = await octokit.rest.pulls.list({
+		relBranches = await octokit.rest.pulls.list({
 			owner: config.REPOSITORY_OWNER_TESTING,
 			repo: repository,
 			state: "open",
 			head: config.REPOSITORY_OWNER_TESTING + ":" + rel,
 			base: config.MASTER_BRANCH_NAME
 		});
-		return relBranches.data.length > 0 ? relBranches.data[0] : {};
 	} catch (error) {
 		app.log.error(error);
 	}
+	return relBranches.data.length > 0 ? relBranches.data[0] : {};
 };
 
 exports.deleteBranch = async (app, context, branch) => {

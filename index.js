@@ -1,3 +1,5 @@
+const schedule = require('node-schedule');
+const reviewReminder = require("./job/review_reminder.js");
 var requester = require("./helper/requester");
 var config = require("./helper/config");
 var util = require("./helper/util");
@@ -30,7 +32,23 @@ module.exports = (app) => {
 		}
 	});
 
-	// listen on label reviewer, trus hit endpoint discord buat reminder nya
+	registerReviewReminderJob(app);
+}
+
+function registerReviewReminderJob(app) {
+	const rule = new schedule.RecurrenceRule();
+	rule.dayOfWeek = [new schedule.Range(1, 5)];
+	rule.hour = 9;
+	rule.minute = 0;
+	rule.tz = "Asia/Jakarta";
+
+	var cronfortesting = "*/5 * * * *";
+
+	schedule.scheduleJob(cronfortesting, function() {
+		console.log("Your job is running");
+		reviewReminder.exec(app);
+	});
+
 }
 
 async function autoCreateReleasePullRequest(app, context) {
@@ -66,12 +84,16 @@ async function autoCreateReleasePullRequest(app, context) {
 		let isUpdateFastForward = await requester.updateRelBranch(app, context, "heads/" + relBranchName, developmentLatestCommitSHA);
 		if (!isUpdateFastForward) {
 			await requester.createComment(app, context, relPullRequest, `Failed updating this rel, new update from ${util.getDevelopmentBranchNameOf(repository)} is not fast forward, please manually keep-up rel ${relBranchName} with ${util.getDevelopmentBranchNameOf(repository)}.`);
-			await requester.createComment(app, context, "", `This update is not fast forward, please manually keep-up rel ${relBranchName} with ${util.getDevelopmentBranchNameOf(repository)}.`);
+			await requester.createComment(app, context, pullRequest, `This update is not fast forward, please manually keep-up rel ${relPullRequest._links.html.href} with ${util.getDevelopmentBranchNameOf(repository)}.`);
 		} else {
 			await requester.createComment(app, context, relPullRequest, `Success, this branch is updated! You are good to go.`);
+			await requester.createComment(app, context, pullRequest, `Your changes already pushed to existing release PR, visit ${relPullRequest._links.html.href}`);
 		}
 	} else {
-		await requester.openPullRequestFromRelToMaster(app, context, relBranchName, pullRequestBody);
+		let releasePR = await requester.openPullRequestFromRelToMaster(app, context, relBranchName, pullRequestBody);
+		if (Object.keys(releasePR).length) {
+			await requester.createComment(app, context, pullRequest, `Release PR created, visit ${releasePR.data.html_url}`);
+		}
 	}
 
 }
