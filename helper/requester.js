@@ -16,38 +16,7 @@ exports.getCommitsOfBranch = async (app, context, branch) => {
 	} catch (error) {
 		app.log.error(error);
 	}
-	return listCommits;	
-};
-
-exports.getRelBranches = async (app, context, pullRequestNumber) => {
-	const octokit = context.octokit;
-	const payload = context.payload;
-	const pullRequest = payload.pull_request;
-	const repository = pullRequest.base.repo.name;
-	var listBranches = {};
-	if (pullRequestNumber !== "") {
-		try {
-			let pr = await octokit.rest.pulls.get({
-				owner: config.REPOSITORY_OWNER_TESTING,
-				repo: repository,
-				pull_number: pullRequestNumber
-			});
-			listBranches.data = [{"ref": pr.data.head.ref}];
-		} catch (error) {
-			app.log.error(error);
-		}
-	} else {
-		try {
-			listBranches = await octokit.rest.git.listMatchingRefs({
-				owner: config.REPOSITORY_OWNER_TESTING,
-				repo: repository,
-				ref: config.SEARCH_REL_KEYWORD
-			});
-		} catch (error) {
-			app.log.error(error);
-		}
-	}
-	return listBranches;
+	return listCommits;
 };
 
 exports.createBranch = async (app, context, newBranchName, branchingFromLatestCommit) => {

@@ -21,17 +21,14 @@ module.exports = (app) => {
 		if (util.isFeatureMergedToDevelopment(context)) {
 			await autoCreateReleasePullRequest(app, context);
 		} else if (util.isRelMergedToMaster(context)) {
-			let isMergebackPullRequestOpened = await requester.openPullRequestFromRelToDevelopment(app, context, headBranch, pullRequestBody);
-			if (!isMergebackPullRequestOpened) {
-				await requester.createComment(app, context, pullRequest, `Mergeback not needed, this branch ${headBranch} will be deleted.`);
-				await requester.deleteBranch(app, context, "heads/" + headBranch);
-			}
+			await requester.openPullRequestFromRelToDevelopment(app, context, headBranch, pullRequestBody);
 		} else if (util.isRelMergedToDevelopment(context)) {
 			await requester.createComment(app, context, pullRequest, `This branch ${headBranch} will be deleted.`);
 			await requester.deleteBranch(app, context, "heads/" + headBranch);
 		}
 	});
 
+	// temporary, will be integrated with Fahmi's discord bot reminder
 	registerReviewReminderJob(app);
 }
 
@@ -58,18 +55,7 @@ async function autoCreateReleasePullRequest(app, context) {
 	const pullRequestBody = pullRequest.body !== null ? pullRequest.body.concat(config.BOT_SIGNATURE) : config.BOT_SIGNATURE;
 	const repository = pullRequest.base.repo.name;
 
-	const listCommitsOnMaster = await requester.getCommitsOfBranch(app, context, config.MASTER_BRANCH_NAME);
-	if (!Object.keys(listCommitsOnMaster).length) {
-		app.log.info(`No commits found on ${config.MASTER_BRANCH_NAME}. Bot will not continue the process.`);
-		return;
-	}
-	const commitMessage = listCommitsOnMaster.data[0].commit.message;
-	const pullRequestNumber = util.getPullRequestNumberFromCommitMessage(commitMessage);
-	const relBranchName = await util.generateRelBranchName(app, context, pullRequestNumber);
-	if (relBranchName == "") {
-		app.log.info(`Failed to generate new rel branch name. Bot will not continue the process.`);
-		return;
-	}
+	const relBranchName = util.generateRelBranchName();
 	const listCommitsOnDevelopment = await requester.getCommitsOfBranch(app, context, util.getDevelopmentBranchNameOf(repository));
 	const developmentLatestCommitSHA = listCommitsOnDevelopment.data[0].sha;
 	const isRelAlreadyExist = await requester.createBranch(app, context, "refs/heads/" + relBranchName, developmentLatestCommitSHA);
